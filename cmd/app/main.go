@@ -1,12 +1,15 @@
 package main
 
 import (
+	"FIO_App/graph"
 	"FIO_App/pkg/kafka"
 	"FIO_App/pkg/router"
 	"FIO_App/pkg/storage/database/postgres"
 	"FIO_App/pkg/storage/database/redis"
 	"FIO_App/pkg/storage/person"
 	"fmt"
+	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/playground"
 	"log"
 	"net/http"
 	"os"
@@ -23,18 +26,17 @@ func main() {
 		log.Fatal("Failed to connect Redis\n", err)
 	}
 
-	//log.Println("sending message")
-	//err = kafka.SendMessageToQueue()
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-
 	st := person.NewStorage(postgresDB)
 
 	go kafka.ConsumeMessage([]string{os.Getenv("ADDRESS")}, st)
 	go kafka.ConsumeFailedMessage([]string{os.Getenv("ADDRESS")})
 
 	r := router.SetupRoutes(st)
+
+	srv := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}}))
+	http.Handle("/", playground.Handler("GraphQL playground", "/query"))
+	http.Handle("/query", srv)
+
 	err = http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), r)
 	if err != nil {
 		log.Fatal(err)

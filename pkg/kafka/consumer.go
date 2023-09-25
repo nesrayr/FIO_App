@@ -21,6 +21,7 @@ const (
 
 func ConsumeMessage(brokerUrl []string, storage person.IStorage) {
 	topic := FioTopic
+
 	// wait for kafka server to start
 	time.Sleep(time.Second * 10)
 
@@ -75,6 +76,9 @@ func ConsumeMessage(brokerUrl []string, storage person.IStorage) {
 }
 
 func ConsumeFailedMessage(brokerUrl []string) {
+	// wait for kafka server to start
+	time.Sleep(time.Second * 10)
+	
 	topic := FailedTopic
 
 	worker, err := ConnectConsumer(brokerUrl)
