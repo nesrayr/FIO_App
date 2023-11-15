@@ -165,7 +165,7 @@ docker-compose up --build
         }
       },
       "post": {
-        "summary": "Create person",
+        "summary": "Create repo",
         "requestBody": {
           "content": {
             "application/json": {
@@ -202,7 +202,7 @@ docker-compose up --build
     },
     "/people{people_id}": {
       "patch": {
-        "summary": "Edit person by id",
+        "summary": "Edit repo by id",
         "requestBody": {
           "content": {
             "application/json": {
@@ -236,7 +236,7 @@ docker-compose up --build
         }
       },
       "delete": {
-        "summary": "Delete person by id",
+        "summary": "Delete repo by id",
         "responses": {
           "200": {
             "description": "ok",

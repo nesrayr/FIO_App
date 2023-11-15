@@ -9,8 +9,7 @@ import (
 )
 
 type Storage struct {
-	client *redis.Client
-	ctx    context.Context
+	Client *redis.Client
 }
 
 func NewStorage() *Storage {
@@ -20,11 +19,11 @@ func NewStorage() *Storage {
 		Password: os.Getenv("REDIS_PASSWORD"),
 		DB:       db,
 	})
-	return &Storage{client: client, ctx: context.Background()}
+	return &Storage{Client: client}
 }
 
 func (s *Storage) Connect() error {
-	err := s.client.Ping(s.ctx).Err()
+	err := s.Client.Ping(context.Background()).Err()
 	if err != nil {
 		return fmt.Errorf("failed to connect to Redis: %w", err)
 	}
@@ -32,7 +31,7 @@ func (s *Storage) Connect() error {
 }
 
 func (s *Storage) Close() error {
-	err := s.client.Close()
+	err := s.Client.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close connnection to Redis: %w", err)
 	}

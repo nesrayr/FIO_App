@@ -1,9 +1,9 @@
 package handlers
 
 import (
+	"FIO_App/pkg/adapters/producer"
 	"FIO_App/pkg/dtos"
-	"FIO_App/pkg/kafka"
-	"FIO_App/pkg/storage/person"
+	"FIO_App/pkg/repo"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
@@ -18,11 +18,12 @@ type IHandler interface {
 }
 
 type Handler struct {
-	storage person.IStorage
+	repository repo.IRepository
+	producer   producer.IProducer
 }
 
-func NewHandler(storage person.IStorage) *Handler {
-	return &Handler{storage: storage}
+func NewHandler(repository repo.IRepository, producer producer.IProducer) *Handler {
+	return &Handler{repository: repository, producer: producer}
 }
 
 func (h *Handler) CreatePerson(ctx *gin.Context) {
@@ -31,7 +32,7 @@ func (h *Handler) CreatePerson(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	err := h.storage.CreatePerson(payload)
+	err := h.repository.AddPerson(payload)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -45,7 +46,7 @@ func (h *Handler) DeletePerson(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err = h.storage.DeletePerson(ID); err != nil {
+	if err = h.repository.DeletePerson(ID); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -63,7 +64,7 @@ func (h *Handler) EditPerson(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err = h.storage.EditPerson(ID, payload); err != nil {
+	if err = h.repository.UpdatePerson(ID, payload); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -102,7 +103,7 @@ func (h *Handler) GetPeople(ctx *gin.Context) {
 	gender, _ = ctx.GetQuery("gender")
 	nationality, _ = ctx.GetQuery("nationality")
 
-	people, err := h.storage.GetPeople(limit, offset, nationality, gender)
+	people, err := h.repository.GetPeople(limit, offset, nationality, gender)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -112,14 +113,14 @@ func (h *Handler) GetPeople(ctx *gin.Context) {
 }
 
 func (h *Handler) ProduceMessage(ctx *gin.Context) {
-	var payload kafka.FIO
+	var payload dtos.FIO
 
 	if err := ctx.ShouldBindJSON(&payload); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	err := kafka.SendMessageToQueue(payload)
+	err := h.producer.SendMessage(ctx, payload)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

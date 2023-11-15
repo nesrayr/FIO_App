@@ -8,7 +8,19 @@ import (
 	"time"
 )
 
-func SendMessageToQueue(fioData FIO) error {
+type IProducer interface {
+	SendMessageToQueue(fioData FIO) error
+}
+
+type Producer struct {
+	config *sarama.Config
+}
+
+func NewProducer(config *sarama.Config) *Producer {
+	return &Producer{config: config}
+}
+
+func (p *Producer) SendMessageToQueue(fioData FIO) error {
 	// wait for kafka server to start
 	time.Sleep(time.Second * 10)
 
@@ -33,18 +45,6 @@ func SendMessageToQueue(fioData FIO) error {
 	}
 	log.Println("message was successfully sent")
 	return nil
-}
-
-func ConnectProducer(brokerUrl []string) (sarama.AsyncProducer, error) {
-	config := sarama.NewConfig()
-	config.Producer.Return.Successes = true
-	config.Producer.RequiredAcks = sarama.WaitForAll
-
-	conn, err := sarama.NewAsyncProducer(brokerUrl, config)
-	if err != nil {
-		return nil, err
-	}
-	return conn, nil
 }
 
 func SendToFailedQueue(producer sarama.AsyncProducer, msg []byte, errorMsg string, topic string) {

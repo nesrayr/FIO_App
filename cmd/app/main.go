@@ -1,21 +1,25 @@
 package main
 
 import (
-	"FIO_App/graph"
-	"FIO_App/pkg/kafka"
+	"FIO_App/pkg/adapters/producer"
+	"FIO_App/pkg/ports/consumer"
+	"FIO_App/pkg/repo"
 	"FIO_App/pkg/router"
+	"FIO_App/pkg/service"
 	"FIO_App/pkg/storage/database/postgres"
 	"FIO_App/pkg/storage/database/redis"
-	"FIO_App/pkg/storage/person"
+	"context"
 	"fmt"
-	"github.com/99designs/gqlgen/graphql/handler"
-	"github.com/99designs/gqlgen/graphql/playground"
 	"log"
 	"net/http"
 	"os"
+	"sync"
+	"time"
 )
 
 func main() {
+	ctx := context.Background()
+
 	postgresDB, err := postgres.ConnectDB()
 	if err != nil {
 		log.Fatal("Failed to connect database\n", err)
@@ -25,23 +29,63 @@ func main() {
 	if err = redisDB.Connect(); err != nil {
 		log.Fatal("Failed to connect Redis\n", err)
 	}
+	defer func() {
+		_ = redisDB.Close()
+	}()
 
-	st := person.NewStorage(postgresDB)
+	repository := repo.NewRepository(context.Background(), postgresDB, redisDB.Client)
+	//producerP := kafka.NewProducer(sarama.NewConfig())
 
-	go kafka.ConsumeMessage([]string{os.Getenv("ADDRESS")}, st)
-	go kafka.ConsumeFailedMessage([]string{os.Getenv("ADDRESS")})
+	pFio := producer.NewProducer(os.Getenv("ADDRESS"), "FIO")
+	defer func() {
+		_ = pFio.Close()
+	}()
+	pFailed := producer.NewProducer(os.Getenv("ADDRESS"), "FIO_FAILED")
+	defer func() {
+		_ = pFailed.Close()
+	}()
 
-	r := router.SetupRoutes(st)
+	s := service.NewService(repository, pFailed)
 
-	srv := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}}))
-	http.Handle("/", playground.Handler("GraphQL playground", "/query"))
-	http.Handle("/query", srv)
+	c := consumer.NewConsumer(os.Getenv("ADDRESS"), "FIO", s)
+	defer func() {
+		_ = c.Close()
+	}()
+
+	wg := &sync.WaitGroup{}
+
+	wg.Add(1)
+	r := router.SetupRoutes(repository, pFio)
+
+	//go func() {
+	//	defer wg.Done()
+	//	err = http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), r)
+	//	if err != nil {
+	//		log.Fatal(err)
+	//	}
+	//}()
+
+	go func() {
+		defer wg.Done()
+		//wait for kafka server to start
+		time.Sleep(10 * time.Second)
+		c.ConsumeMessages(ctx)
+	}()
 
 	err = http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), r)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Println("after starting server")
+	//go kafka.ConsumeMessage([]string{os.Getenv("ADDRESS")}, repository)
+	//go kafka.ConsumeFailedMessage([]string{os.Getenv("ADDRESS")})
 
+	//srv := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}}))
+	//http.Handle("/", playground.Handler("GraphQL playground", "/query"))
+	//http.Handle("/query", srv)
+
+	//err = http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), r)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 }

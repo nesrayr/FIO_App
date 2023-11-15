@@ -1,32 +1,31 @@
 package router
 
 import (
-	"FIO_App/graph"
+	"FIO_App/pkg/adapters/producer"
 	"FIO_App/pkg/handlers"
-	"FIO_App/pkg/storage/person"
-	"github.com/99designs/gqlgen/graphql/handler"
+	"FIO_App/pkg/repo"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(storage person.IStorage) *gin.Engine {
+func SetupRoutes(storage repo.IRepository, producer producer.IProducer) *gin.Engine {
 	router := gin.Default()
 	router.GET("/echo", func(c *gin.Context) {
 		c.String(200, "Check")
 	})
 
-	graphqlHandler := handler.NewDefaultServer(
-		graph.NewExecutableSchema(
-			graph.Config{
-				Resolvers: &graph.Resolver{},
-			},
-		),
-	)
+	//graphqlHandler := handler.NewDefaultServer(
+	//	graph.NewExecutableSchema(
+	//		graph.Config{
+	//			Resolvers: &graph.Resolver{},
+	//		},
+	//	),
+	//)
 
-	handlerH := handlers.NewHandler(storage)
+	handlerH := handlers.NewHandler(storage, producer)
 
 	router.GET("/", playgroundHandler())
-	router.POST("/query", gin.WrapH(graphqlHandler))
+	//router.POST("/query", gin.WrapH(graphqlHandler))
 
 	router.POST("/people", handlerH.CreatePerson)
 	router.PATCH("/people/:id", handlerH.EditPerson)

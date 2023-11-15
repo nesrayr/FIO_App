@@ -1,11 +1,16 @@
 package kafka
 
 import (
-	"FIO_App/pkg/storage/person"
+	"FIO_App/pkg/repo"
 	"encoding/json"
 	"github.com/IBM/sarama"
 	"log"
 	"time"
+)
+
+const (
+	FioTopic    = "FIO"
+	FailedTopic = "FIO_FAILED"
 )
 
 type FIO struct {
@@ -14,12 +19,7 @@ type FIO struct {
 	Patronymic string `json:"patronymic"`
 }
 
-const (
-	FioTopic    = "FIO"
-	FailedTopic = "FIO_FAILED"
-)
-
-func ConsumeMessage(brokerUrl []string, storage person.IStorage) {
+func ConsumeMessage(brokerUrl []string, r repo.IRepository) {
 	topic := FioTopic
 
 	// wait for kafka server to start
@@ -63,7 +63,7 @@ func ConsumeMessage(brokerUrl []string, storage person.IStorage) {
 					log.Println(err)
 				}
 				log.Println(personDTO)
-				if err = storage.CreatePerson(personDTO); err != nil {
+				if err = r.AddPerson(personDTO); err != nil {
 					log.Println(err)
 				}
 			case <-signals:
@@ -78,7 +78,7 @@ func ConsumeMessage(brokerUrl []string, storage person.IStorage) {
 func ConsumeFailedMessage(brokerUrl []string) {
 	// wait for kafka server to start
 	time.Sleep(time.Second * 10)
-	
+
 	topic := FailedTopic
 
 	worker, err := ConnectConsumer(brokerUrl)
@@ -97,15 +97,19 @@ func ConsumeFailedMessage(brokerUrl []string) {
 	go func() {
 		for {
 			select {
-			case msg := <-consumer.Messages():
-				log.Println(msg.Value)
+			case msg, ok := <-consumer.Messages():
+				if !ok {
+					log.Println("Channel closed")
+					return
+				}
+				log.Println(string(msg.Value))
 			case <-signals:
 				log.Println("Interrupted")
 				return
 			}
 		}
 	}()
-
+	<-signals
 }
 
 func ConnectConsumer(brokerUrl []string) (sarama.Consumer, error) {
@@ -113,6 +117,18 @@ func ConnectConsumer(brokerUrl []string) (sarama.Consumer, error) {
 	config.Consumer.Return.Errors = true
 
 	conn, err := sarama.NewConsumer(brokerUrl, config)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
+func ConnectProducer(brokerUrl []string) (sarama.AsyncProducer, error) {
+	config := sarama.NewConfig()
+	config.Producer.Return.Successes = true
+	config.Producer.RequiredAcks = sarama.WaitForAll
+
+	conn, err := sarama.NewAsyncProducer(brokerUrl, config)
 	if err != nil {
 		return nil, err
 	}

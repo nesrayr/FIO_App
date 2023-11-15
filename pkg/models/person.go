@@ -1,9 +1,7 @@
 package models
 
-import "gorm.io/gorm"
-
 type Person struct {
-	gorm.Model
+	ID          int    `gorm:"primary key"`
 	Name        string `gorm:"not null"`
 	Surname     string `gorm:"not null"`
 	Patronymic  string
