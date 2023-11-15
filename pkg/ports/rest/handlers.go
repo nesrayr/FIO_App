@@ -1,4 +1,4 @@
-package handlers
+package rest
 
 import (
 	"FIO_App/pkg/adapters/producer"

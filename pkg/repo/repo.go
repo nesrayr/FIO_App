@@ -3,6 +3,7 @@ package repo
 import (
 	"FIO_App/pkg/dtos"
 	"FIO_App/pkg/errs"
+	"FIO_App/pkg/logging"
 	"context"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -22,10 +23,10 @@ type Repository struct {
 	ctx context.Context
 }
 
-func NewRepository(ctx context.Context, db *gorm.DB, rc *redis.Client) *Repository {
+func NewRepository(ctx context.Context, db *gorm.DB, rc *redis.Client, l logging.Logger) *Repository {
 	return &Repository{
 		permRepo:   &PermRepo{*db},
-		cachedRepo: &CachedRepo{*rc},
+		cachedRepo: &CachedRepo{*rc, l},
 		ctx:        ctx,
 	}
 }

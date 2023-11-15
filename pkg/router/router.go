@@ -2,14 +2,21 @@ package router
 
 import (
 	"FIO_App/pkg/adapters/producer"
-	"FIO_App/pkg/handlers"
+	"FIO_App/pkg/logging"
+	"FIO_App/pkg/ports/rest"
 	"FIO_App/pkg/repo"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
+	"io"
 )
 
-func SetupRoutes(storage repo.IRepository, producer producer.IProducer) *gin.Engine {
+func SetupRoutes(storage repo.IRepository, producer producer.IProducer, logger logging.Logger) *gin.Engine {
+
 	router := gin.Default()
+
+	gin.DefaultWriter = io.MultiWriter(logger.Writer())
+	gin.DefaultErrorWriter = io.MultiWriter(logger.Writer())
+
 	router.GET("/echo", func(c *gin.Context) {
 		c.String(200, "Check")
 	})
@@ -22,7 +29,7 @@ func SetupRoutes(storage repo.IRepository, producer producer.IProducer) *gin.Eng
 	//	),
 	//)
 
-	handlerH := handlers.NewHandler(storage, producer)
+	handlerH := rest.NewHandler(storage, producer)
 
 	router.GET("/", playgroundHandler())
 	//router.POST("/query", gin.WrapH(graphqlHandler))

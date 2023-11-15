@@ -2,10 +2,10 @@ package producer
 
 import (
 	"FIO_App/pkg/dtos"
+	"FIO_App/pkg/logging"
 	"context"
 	"encoding/json"
 	"github.com/segmentio/kafka-go"
-	"log"
 )
 
 type failedFio struct {
@@ -23,13 +23,15 @@ type IProducer interface {
 
 type Producer struct {
 	w *kafka.Writer
+	l logging.Logger
 }
 
-func NewProducer(brokerUrl string, topic string) *Producer {
+func NewProducer(brokerUrl string, topic string, l logging.Logger) *Producer {
 	return &Producer{w: &kafka.Writer{
 		Addr:  kafka.TCP(brokerUrl),
 		Topic: topic,
-	}}
+	},
+		l: l}
 }
 
 func (p *Producer) SendFailedMessage(ctx context.Context, fio dtos.FIO, errorMsg string) error {
@@ -41,30 +43,30 @@ func (p *Producer) SendFailedMessage(ctx context.Context, fio dtos.FIO, errorMsg
 	}
 	data, err := json.Marshal(fioToSend)
 	if err != nil {
-		log.Printf("cannot send fio %s %s to FIO_FAILED: %s", fio.Name, fio.Surname, err.Error())
+		p.l.Errorf("cannot send fio %s %s to FIO_FAILED: %s", fio.Name, fio.Surname, err.Error())
 		return err
 	}
 	err = p.w.WriteMessages(ctx, kafka.Message{Value: data})
 	if err != nil {
-		log.Printf("cannot send fio %s %s to FIO_FAILED: %s", fio.Name, fio.Surname, err.Error())
+		p.l.Errorf("cannot send fio %s %s to FIO_FAILED: %s", fio.Name, fio.Surname, err.Error())
 		return err
 	}
-	log.Printf("send fio %s %s to FIO_FAILED", fio.Name, fio.Surname)
+	p.l.Infof("send fio %s %s to FIO_FAILED", fio.Name, fio.Surname)
 	return nil
 }
 
 func (p *Producer) SendMessage(ctx context.Context, fio dtos.FIO) error {
 	data, err := json.Marshal(fio)
 	if err != nil {
-		log.Printf("cannot send fio %s %s to FIO: %s", fio.Name, fio.Surname, err.Error())
+		p.l.Errorf("cannot send fio %s %s to FIO: %s", fio.Name, fio.Surname, err.Error())
 		return err
 	}
 	err = p.w.WriteMessages(ctx, kafka.Message{Value: data})
 	if err != nil {
-		log.Printf("cannot send fio %s %s to FIO: %s", fio.Name, fio.Surname, err.Error())
+		p.l.Errorf("cannot send fio %s %s to FIO: %s", fio.Name, fio.Surname, err.Error())
 		return err
 	}
-	log.Printf("send fio %s %s to FIO", fio.Name, fio.Surname)
+	p.l.Infof("send fio %s %s to FIO", fio.Name, fio.Surname)
 	return nil
 }
 
