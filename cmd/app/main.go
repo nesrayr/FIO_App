@@ -4,6 +4,7 @@ import (
 	"FIO_App/pkg/adapters/producer"
 	"FIO_App/pkg/logging"
 	"FIO_App/pkg/ports/consumer"
+	"FIO_App/pkg/ports/graph"
 	"FIO_App/pkg/repo"
 	"FIO_App/pkg/router"
 	"FIO_App/pkg/service"
@@ -55,7 +56,7 @@ func main() {
 
 	wg := &sync.WaitGroup{}
 
-	wg.Add(1)
+	wg.Add(2)
 
 	r := router.SetupRoutes(repository, pFio, logger)
 
@@ -72,6 +73,21 @@ func main() {
 		//wait for kafka server to start
 		time.Sleep(10 * time.Second)
 		c.ConsumeMessages(ctx)
+	}()
+
+	graphqlServerAddr := fmt.Sprintf("%s:%s", os.Getenv("GRAPHQL_HOST"), os.Getenv("GRAPHQL_PORT"))
+	graphqlServer, err := graph.NewGraphQLServer(graphqlServerAddr, repository, logger)
+	if err != nil {
+		logger.Fatal(err)
+	}
+
+	go func() {
+		defer wg.Done()
+		logger.Info("started graphql server successfully")
+		err = graphqlServer.ListenAndServe()
+		if err != nil {
+			logger.Fatal(err)
+		}
 	}()
 
 	err = http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), r)

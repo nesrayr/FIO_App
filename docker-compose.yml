@@ -27,8 +27,8 @@ services:
     volumes:
       - kafka-storage:/var/lib/kafka/data
 
-  server:
-    container_name: server
+  rest-server:
+    container_name: rest-server
     build:
       context: .
       args:
