@@ -5,23 +5,26 @@ import (
 	"FIO_App/pkg/logging"
 	"FIO_App/pkg/ports/consumer"
 	"FIO_App/pkg/ports/graph"
+	"FIO_App/pkg/ports/rest"
 	"FIO_App/pkg/repo"
-	"FIO_App/pkg/router"
 	"FIO_App/pkg/service"
 	"FIO_App/pkg/storage/database/postgres"
 	"FIO_App/pkg/storage/database/redis"
 	"context"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"net/http"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 )
 
+var logger = logging.GetLogger()
+
 func main() {
 	ctx := context.Background()
-
-	logger := logging.GetLogger()
 
 	postgresDB, err := postgres.ConnectDB()
 	if err != nil {
@@ -53,20 +56,11 @@ func main() {
 	defer func() {
 		_ = c.Close()
 	}()
+	logger.Info("connected to topic FIO successfully")
 
 	wg := &sync.WaitGroup{}
 
-	wg.Add(2)
-
-	r := router.SetupRoutes(repository, pFio, logger)
-
-	//go func() {
-	//	defer wg.Done()
-	//	err = http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), r)
-	//	if err != nil {
-	//		logger.Fatal(err)
-	//	}
-	//}()
+	wg.Add(3)
 
 	go func() {
 		defer wg.Done()
@@ -75,32 +69,46 @@ func main() {
 		c.ConsumeMessages(ctx)
 	}()
 
-	graphqlServerAddr := fmt.Sprintf("%s:%s", os.Getenv("GRAPHQL_HOST"), os.Getenv("GRAPHQL_PORT"))
-	graphqlServer, err := graph.NewGraphQLServer(graphqlServerAddr, repository, logger)
+	r := rest.SetupRoutes(repository, pFio, logger)
+	g, err := graph.NewGraphQLServer(fmt.Sprintf(":%s", os.Getenv("GRAPHQL_PORT")), repository, logger)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
+	// configuring graceful shutdown
+	sigQuit := make(chan os.Signal, 1)
+	defer close(sigQuit)
+	signal.Ignore(syscall.SIGHUP, syscall.SIGPIPE)
+	signal.Notify(sigQuit, syscall.SIGINT, syscall.SIGTERM)
+
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		select {
+		case s := <-sigQuit:
+			return fmt.Errorf("captured signal: %v", s)
+		case <-ctx.Done():
+			return nil
+		}
+	})
+
 	go func() {
 		defer wg.Done()
-		logger.Info("started graphql server successfully")
-		err = graphqlServer.ListenAndServe()
+		logger.Info("started rest server successfully")
+		err = http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), r)
 		if err != nil {
 			logger.Fatal(err)
 		}
 	}()
 
-	err = http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), r)
-	if err != nil {
-		logger.Fatal(err)
-	}
+	go func() {
+		defer wg.Done()
+		logger.Info("started graphql server successfully")
+		err = http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("GRAPHQL_PORT")), g)
+		if err != nil {
+			logger.Fatal(err)
+		}
+	}()
 
-	//srv := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}}))
-	//http.Handle("/", playground.Handler("GraphQL playground", "/query"))
-	//http.Handle("/query", srv)
+	wg.Wait()
 
-	//err = http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), r)
-	//if err != nil {
-	//	logger.Fatal(err)
-	//}
 }

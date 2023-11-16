@@ -107,18 +107,20 @@
         }
       }
     },
-    "/people{people_id}": {
+    "/people{person_id}": {
       "patch": {
         "summary": "Edit person by id",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PersonDTO"
-              }
+        "parameters": [
+          {
+            "name": "person_id",
+            "in": "path",
+            "description": "Person identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           }
-        },
+        ],
         "responses": {
           "200": {
             "content": {
@@ -144,6 +146,17 @@
       },
       "delete": {
         "summary": "Delete person by id",
+        "parameters": [
+          {
+            "name": "person_id",
+            "in": "path",
+            "description": "Person identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "ok",
@@ -169,7 +182,41 @@
       }
     },
     "/kafka/produce": {
-
+      "post": {
+        "summary": "Send message to kafka",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonDTO"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200" : {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -202,6 +249,25 @@
             "type": "string"
           },
           "nationality": {
+            "type": "string"
+          }
+        }
+      },
+      "FIO": {
+        "required": [
+          "name",
+          "surname",
+          "patronymic"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "surname": {
+            "type": "string"
+          },
+          "patronymic": {
             "type": "string"
           }
         }

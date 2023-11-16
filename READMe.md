@@ -70,237 +70,321 @@
 некорректно, структура отправляется в топик FIO_FAILED. При добавлении ФИО
 через REST или GraphQL все поля должны быть заполнены сразу.
 
+Через REST и GraphQL поддерживаются все CRUD-операции, также можно выбрать
+список пользователей с фильтрами по всем полям (фамилия, имя, отчество,
+возраст, пол, национальность) и пагинацией.
+
+Также для ускоренного получения ФИО реализован кеш, в который на время попадают
+все новые или только что обновлённые ФИО.
+
 ## Используемые технологии
 
 * go 1.21
 * Apache Kafka
 * PostgreSQL
 * Redis
+* GORM
 * Gin Web Framework
 * GraphQL
 
 ## Запуск приложения
 
 Для запуска приложения необходимо задать переменные окружения в корне проекта в файле `.env`
+
+```text
+HOST=
+PORT=
+
+GRAPHQL_HOST=
+GRAPHQL_PORT=
+
+# db
+DB_USER=
+DB_PASSWORD=
+DB_NAME=
+DB_HOST=
+DB_PORT=
+
+#redis
+REDIS_HOST=
+REDIS_PORT=
+REDIS_PASSWORD=
+REDIS_DB=
+
+#kafka
+ADDRESS=
+```
+
 и выполнить следующую команду:
 
 ```shell
 docker-compose up --build
 ```
 
-## OpenAPI
+## Формат REST-запросов
+
+### Добавление пользователя
+
+* Метод: `POST`
+* Эндпоинт: `http://localhost:8080/people`
+* Формат тела запроса:
 
 ```json
 {
-  "openapi": "3.0.3",
-  "info": {
-    "title": "FIO_App",
-    "version": "1.0.0"
-  },
-  "paths": {
-    "/people": {
-      "get": {
-        "summary": "Get people",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Number of people to show",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "Number of people to skip",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "nationality",
-            "in": "query",
-            "description": "Filter by nationality",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "gender",
-            "in": "query",
-            "description": "Filter by gender",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PersonDTO"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "bad request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BadRequestResponse"
-                }
-              }
-            }
-          }
+    "name": "Ivan", 
+    "surname": "Ivanov", 
+    "patronymic": "Ivanovich",
+    "age": 39,
+    "gender": "male",
+    "nation": "RU"
+}
+```
+
+* Формат ответа:
+
+```json
+{}
+```
+
+### Получение списка пользователей
+
+* Метод: `GET`
+* Эндпоинт: `http://localhost:8080/people`
+* Формат запроса:
+
+```json
+{
+    "offset": 0,
+    "limit": 1,
+    "gender": "",
+    "nation": ""
+}
+```
+
+* Формат ответа:
+
+```json
+{
+    "data": [
+        {
+            "id": 1,
+            "name": "Ivan",
+            "surname": "Ivanov",
+            "patronymic": "Ivanovich",
+            "age": 39,
+            "gender": "male",
+            "nation": "RU"
         }
-      },
-      "post": {
-        "summary": "Create repo",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PersonDTO"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "bad request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BadRequestResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/people{people_id}": {
-      "patch": {
-        "summary": "Edit repo by id",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PersonDTO"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "ok"
-          },
-          "400": {
-            "description": "bad request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BadRequestResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "summary": "Delete repo by id",
-        "responses": {
-          "200": {
-            "description": "ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "bad request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BadRequestResponse"
-                }
-              }
-            }
-          }
-        }
-      }
+    ]
+}
+```
+
+### Обновление пользователя
+
+* Метод: `PUT`
+* Эндпоинт: `http://localhost:8080/people/:id`
+* Формат запроса:
+
+```json
+{
+    "name": "Ivan",
+    "surname": "Ivanov",
+    "patronymic": "Ivanovich",
+    "age": 40,
+    "gender": "male",
+    "nation": "RU"
+}
+```
+
+* Формат ответа:
+
+```json
+{}
+```
+
+### Удаление пользователя
+
+* Метод: `DELETE`
+* Эндпоинт: `http://localhost:8080/people/:id`
+* Формат ответа:
+
+```json
+{}
+```
+
+### Отправка сообщения в топик кафки
+
+* Метод: `POST`
+* Эндпоинт: `http://localhost:8080/kafka/produce`
+* Формат запроса:
+
+```json
+{
+  "name": "Arsen",
+  "surname": "Yarullin",
+  "patronymic": "Rustemovich"
+}
+```
+
+* Формат ответа:
+
+```json
+{}
+```
+
+## Формат GraphQL-запросов
+
+***Все запросы выполняются по адресу `http://localhost:8081`***
+
+### Добавление пользователя
+
+* Формат запроса:
+
+```text
+mutation AddFio {
+    addFio(
+        name: "Ivan"
+        surname: "Ivanov"
+        patronymic: "Ivanovich"
+        age: 20
+        gender: "male"
+        nation: "RU"
+    )
+}
+```
+
+* Формат ответа:
+
+```json
+{
+  "data": {
+    "addFio": true
+  }
+}
+```
+
+### Получение пользователя
+
+* Формат запроса:
+
+```text
+query GetFioById {
+    getFioById(id: 2) {
+        id
+        name
+        surname
+        patronymic
+        age
+        gender
+        nation
     }
-  },
-  "components": {
-    "schemas": {
-      "PersonDTO": {
-        "required": [
-          "name",
-          "surname",
-          "patronymic",
-          "age",
-          "gender",
-          "nationality"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "surname": {
-            "type": "string"
-          },
-          "patronymic": {
-            "type": "string"
-          },
-          "age": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "gender": {
-            "type": "string"
-          },
-          "nationality": {
-            "type": "string"
-          }
-        }
-      },
-      "BadRequestResponse": {
-        "type": "object"
-      }
+}
+```
+
+* Формат ответа:
+
+```json
+{
+  "data": {
+    "getFioByID": {
+      "age": 54,
+      "gender": "male",
+      "id": null,
+      "name": "Ivan",
+      "nationality": "HR",
+      "patronymic": "",
+      "surname": "Ivankov"
     }
   }
 }
 ```
+
+### Получение списка пользователей
+
+* Формат запроса:
+
+```text
+query GetFios {
+    getFios(offset: 0, limit: 1) {
+        age
+        gender
+        id
+        name
+        nation
+        patronymic
+        surname
+    }
+}
+```
+
+* Формат ответа:
+
+```json
+{
+    "data": {
+        "getFios": [
+            {
+              "age": 54,
+              "gender": "male",
+              "id": null,
+              "name": "Ivan",
+              "nationality": "HR",
+              "patronymic": "",
+              "surname": "Ivankov"
+            }
+        ]
+    }
+}
+```
+
+### Обновление пользователя
+
+* Формат запроса:
+
+```text
+mutation UpdateFio {
+    updateFio(
+        gender: "male"
+        nation: "RU"
+        id: 2
+        name: "Ivan"
+        surname: "Ivankov"
+        patronymic: "Romanovich"
+        age: 40
+    )
+}
+
+```
+
+* Формат ответа:
+
+```json
+{
+    "data": {
+        "updateFio": true
+    }
+}
+```
+
+### Удаление пользователя
+
+* Формат запроса:
+
+```text
+mutation DeleteFio {
+    deleteFio(id: 2)
+}
+```
+
+* Формат ответа:
+
+```json
+{
+    "data": {
+        "deleteFio": true
+    }
+}
+```
+
+
 

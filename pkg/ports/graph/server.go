@@ -5,10 +5,9 @@ import (
 	"FIO_App/pkg/repo"
 	"github.com/graphql-go/graphql"
 	"github.com/graphql-go/handler"
-	"net/http"
 )
 
-func NewGraphQLServer(addr string, repository repo.IRepository, logger logging.Logger) (*http.Server, error) {
+func NewGraphQLServer(addr string, repository repo.IRepository, logger logging.Logger) (*handler.Handler, error) {
 	query := rootQuery(repository, logger)
 	mutation := rootMutation(repository, logger)
 
@@ -21,8 +20,5 @@ func NewGraphQLServer(addr string, repository repo.IRepository, logger logging.L
 	}
 
 	h := handler.New(&handler.Config{Schema: &schema, Pretty: true})
-
-	server := &http.Server{Addr: addr, Handler: h}
-
-	return server, nil
+	return h, nil
 }
