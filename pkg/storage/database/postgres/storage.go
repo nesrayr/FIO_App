@@ -1,7 +1,7 @@
 package postgres
 
 import (
-	"FIO_App/pkg/storage/models"
+	"FIO_App/pkg/models"
 	"fmt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

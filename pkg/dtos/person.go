@@ -1,6 +1,14 @@
 package dtos
 
-import "FIO_App/pkg/storage/models"
+import (
+	"FIO_App/pkg/models"
+)
+
+type FIO struct {
+	Name       string `json:"name"`
+	Surname    string `json:"surname"`
+	Patronymic string `json:"patronymic"`
+}
 
 type PersonDTO struct {
 	Name        string `json:"name"`

@@ -1,47 +1,114 @@
 package main
 
 import (
-	"FIO_App/graph"
-	"FIO_App/pkg/kafka"
-	"FIO_App/pkg/router"
+	"FIO_App/pkg/adapters/producer"
+	"FIO_App/pkg/logging"
+	"FIO_App/pkg/ports/consumer"
+	"FIO_App/pkg/ports/graph"
+	"FIO_App/pkg/ports/rest"
+	"FIO_App/pkg/repo"
+	"FIO_App/pkg/service"
 	"FIO_App/pkg/storage/database/postgres"
 	"FIO_App/pkg/storage/database/redis"
-	"FIO_App/pkg/storage/person"
+	"context"
 	"fmt"
-	"github.com/99designs/gqlgen/graphql/handler"
-	"github.com/99designs/gqlgen/graphql/playground"
-	"log"
+	"golang.org/x/sync/errgroup"
 	"net/http"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
 )
 
+var logger = logging.GetLogger()
+
 func main() {
+	ctx := context.Background()
+
 	postgresDB, err := postgres.ConnectDB()
 	if err != nil {
-		log.Fatal("Failed to connect database\n", err)
+		logger.Fatal("Failed to connect database\n", err)
 	}
 
 	redisDB := redis.NewStorage()
 	if err = redisDB.Connect(); err != nil {
-		log.Fatal("Failed to connect Redis\n", err)
+		logger.Fatal("Failed to connect Redis\n", err)
 	}
+	defer func() {
+		_ = redisDB.Close()
+	}()
 
-	st := person.NewStorage(postgresDB)
+	repository := repo.NewRepository(context.Background(), postgresDB, redisDB.Client, logger)
 
-	go kafka.ConsumeMessage([]string{os.Getenv("ADDRESS")}, st)
-	go kafka.ConsumeFailedMessage([]string{os.Getenv("ADDRESS")})
+	pFio := producer.NewProducer(os.Getenv("ADDRESS"), "FIO", logger)
+	defer func() {
+		_ = pFio.Close()
+	}()
+	pFailed := producer.NewProducer(os.Getenv("ADDRESS"), "FIO_FAILED", logger)
+	defer func() {
+		_ = pFailed.Close()
+	}()
 
-	r := router.SetupRoutes(st)
+	s := service.NewService(repository, pFailed)
 
-	srv := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{}}))
-	http.Handle("/", playground.Handler("GraphQL playground", "/query"))
-	http.Handle("/query", srv)
+	c := consumer.NewConsumer(os.Getenv("ADDRESS"), "FIO", s, logger)
+	defer func() {
+		_ = c.Close()
+	}()
+	logger.Info("connected to topic FIO successfully")
 
-	err = http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), r)
+	wg := &sync.WaitGroup{}
+
+	wg.Add(3)
+
+	go func() {
+		defer wg.Done()
+		//wait for kafka server to start
+		time.Sleep(10 * time.Second)
+		c.ConsumeMessages(ctx)
+	}()
+
+	r := rest.SetupRoutes(repository, pFio, logger)
+	g, err := graph.NewGraphQLServer(fmt.Sprintf(":%s", os.Getenv("GRAPHQL_PORT")), repository, logger)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 
-	log.Println("after starting server")
+	// configuring graceful shutdown
+	sigQuit := make(chan os.Signal, 1)
+	defer close(sigQuit)
+	signal.Ignore(syscall.SIGHUP, syscall.SIGPIPE)
+	signal.Notify(sigQuit, syscall.SIGINT, syscall.SIGTERM)
+
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		select {
+		case s := <-sigQuit:
+			return fmt.Errorf("captured signal: %v", s)
+		case <-ctx.Done():
+			return nil
+		}
+	})
+
+	go func() {
+		defer wg.Done()
+		logger.Info("started rest server successfully")
+		err = http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("PORT")), r)
+		if err != nil {
+			logger.Fatal(err)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		logger.Info("started graphql server successfully")
+		err = http.ListenAndServe(fmt.Sprintf(":%s", os.Getenv("GRAPHQL_PORT")), g)
+		if err != nil {
+			logger.Fatal(err)
+		}
+	}()
+
+	wg.Wait()
 
 }

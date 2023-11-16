@@ -1,4 +1,4 @@
-package kafka
+package apis
 
 import (
 	"FIO_App/pkg/dtos"
@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-func EnrichData(fio FIO) (dtos.PersonDTO, error) {
+func EnrichData(fio dtos.FIO) (dtos.PersonDTO, error) {
 	name := fio.Name
 	age, gender, nationality, err := fetchExternalData(name)
 	if err != nil {
