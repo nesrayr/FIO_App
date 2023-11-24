@@ -7,13 +7,11 @@
 ## Структура 
 
 ```text
-│   docker-compose.yml
+│   docker-compose.yml        
 │   Dockerfile
 │   go.mod
 │   go.sum
-│   gqlgen.yml
 │   READMe.md
-│
 ├───api
 │       api.json
 │
@@ -21,43 +19,62 @@
 │   └───app
 │           main.go
 │
-├───graph
-│   │   generated.go
-│   │   resolver.go
-│   │   schema.graphqls
-│   │   schema.resolvers.go
-│   │
-│   └───model
-│           models_gen.go
+├───logs
+│       all.log
 │
 └───pkg
+    ├───adapters
+    │   ├───apis
+    │   │       apis.go
+    │   │
+    │   └───producer
+    │           producer.go
+    │
     ├───dtos
     │       person.go
     │
-    ├───handlers
-    │       handlers.go
+    ├───errs
+    │       errs.go
     │
-    ├───kafka
-    │       consumer.go
-    │       producer.go
-    │       utils.go
+    ├───logging
+    │       logging.go
     │
-    ├───router
-    │       router.go
+    ├───models
+    │       person.go
+    │
+    ├───ports
+    │   ├───consumer
+    │   │       consumer.go
+    │   │
+    │   ├───graph
+    │   │       fio_type.go
+    │   │       mutation.go
+    │   │       query.go
+    │   │       server.go
+    │   │
+    │   └───rest
+    │           handlers.go
+    │           router.go
+    │           server.go
+    │
+    ├───repo
+    │       cache.go
+    │       permanent.go
+    │       repo.go
+    │
+    ├───service
+    │   │   service.go
+    │   │
+    │   └───utils
+    │           validation.go
     │
     └───storage
-        ├───database
-        │   ├───postgres
-        │   │       storage.go
-        │   │
-        │   └───redis
-        │           storage.go
-        │
-        ├───models
-        │       person.go
-        │
-        └───person
-                storage.go
+        └───database
+            ├───postgres
+            │       storage.go
+            │
+            └───redis
+                    storage.go
 
 ```
 
